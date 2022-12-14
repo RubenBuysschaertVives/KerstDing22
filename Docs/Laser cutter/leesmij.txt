@@ -1,0 +1,4 @@
+Gebruik van splines in Fusion 360, geeft problemen bij het importeren naar LaserWorks.
+Wil je toch splines gebruiken, doe dat dan... Maar vóór het exporteren naar DXF in Fusion, doe een offset op die splines. Verwijder de splines en exporteer naar LaserWorks...
+
+december 2022
