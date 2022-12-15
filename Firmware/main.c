@@ -1,12 +1,15 @@
-// Kerstboom voorbereidingen.
+// KerstDing22 - Vives - Elektronica-ICT Kortrijk.
 //
+// Hardware:
 // APA102C LED-strip met 72 LED's.
 // HC-SR04 ultrasone sensor.
 // Servomotor.
 // MPR121 capacitive touch module.
 // Nucleo Extension Shield.
+// Nucleo F091RC
 // 
-// Versie: 20221214
+// Versie: 20221215
+// R.Buysschaert
 
 // Includes.
 #include "stm32f091xc.h"
@@ -24,23 +27,30 @@
 #include "timer6.h"
 #include "pwm.h"
 
-// Functie prototypes.
+// Defines.
+#define TRIGGER_DISTANCE 100															// Afstand in cm vanwaar de servo bediend moet worden.
+#define NUMBER_OF_SUCCESSIVE_DISTANCE_MEASUREMENTS 6			// De inferieure HC-SR04 sensor verschillende keren inlezen, zodat foute metingen gefilterd kunnen worden...
+#define PWM_VARIATION_SPEED 3															// Snelheid waarmee de PWM voor de servo mag wijzigen.
+
+// Functieprototypes.
 void SystemClock_Config(void);
 void InitIo(void);
 void WaitForMs(uint32_t timespan);
 
 // Variabelen aanmaken. 
-// OPM: het keyword 'static', zorgt ervoor dat de variabele enkel binnen dit bestand gebruikt kan worden.
 static bool sw1Help = false, sw2Help = false, sw3Help = false;
 static bool touch1Help = false, touch2Help = false, touch3Help = false;
+static volatile bool newDistanceAvailable = false;
 static char text[101];
-static uint8_t counter = 0, index = 65;
-static uint8_t brightness = 0, color = 0;	// 0b00000BGR
+static uint8_t counter = 0, randomIndex = 0;
+static volatile uint8_t distanceIndex = 0, distanceSampleDowncounter = NUMBER_OF_SUCCESSIVE_DISTANCE_MEASUREMENTS;
+static uint8_t brightness = 0;
 uint8_t arrayBrightness = MAXIMUM_LED_BRIGHTNESS, arrayRed = 0, arrayGreen = 255, arrayBlue = 0;
 static uint16_t touchStatus = 0, touchStatusOld = 0;
+static volatile uint16_t pwm = PWM_OFFSET;
 static volatile uint32_t ticks = 0;
 APA102C rgbLeds[NUMBER_OF_APA102C_LEDS];
-static volatile uint8_t distance = 0;
+static volatile uint8_t newDistance = 0, distanceCopy = 0;
 
 
 // Entry point.
@@ -55,14 +65,14 @@ int main(void)
 	InitSpi1();
 	InitI2C1();
 	InitMpr121();
+	InitIo();
 	InitTimer6();
 	InitPwm();
-	InitIo();
 	
 	// Laten weten dat we opgestart zijn, via de USART2 (USB).
-	StringToUsart2("Reboot\r\n");
+	StringToUsart2("Reboot - KerstDing22\r\n");
 	
-	// RGB-LED's resetten.
+	// Alle RGB-LED's resetten.
 	for(counter = 0; counter < NUMBER_OF_APA102C_LEDS; counter++)
 	{
 		rgbLeds[counter].brightness = arrayBrightness;
@@ -76,15 +86,14 @@ int main(void)
 	// Oneindige lus starten.
 	while (1)
 	{	
-		// Kleur bepalen a.d.h.v. SW1 t.e.m. SW3.
+		// Tijdens debugging, kleur laten bepalen a.d.h.v. SW1 t.e.m. SW3 (flankdetectie).
 		if(SW1Active() && (sw1Help == false))
 		{
 			sw1Help = true;
 			
-			if(arrayRed == 0)
-				arrayRed = 255;
-			else
-				arrayRed = 0;			
+			arrayRed = 255;
+			arrayGreen = 0;
+			arrayBlue = 0;		
 		}
 		if(!SW1Active())
 			sw1Help = false;
@@ -93,10 +102,9 @@ int main(void)
 		{
 			sw2Help = true;
 			
-			if(arrayGreen == 0)
-				arrayGreen = 255;
-			else
-				arrayGreen = 0;			
+			arrayRed = 0;
+			arrayGreen = 255;
+			arrayBlue = 0;	
 		}
 		if(!SW2Active())
 			sw2Help = false;
@@ -105,50 +113,32 @@ int main(void)
 		{
 			sw3Help = true;
 			
-			if(arrayBlue == 0)
-				arrayBlue = 255;
-			else
-				arrayBlue = 0;			
+			arrayRed = 0;
+			arrayGreen = 0;
+			arrayBlue = 255;			
 		}
 		if(!SW3Active())
-			sw3Help = false;
+			sw3Help = false;	
 		
 		
-		// Servo testen met SW4.
-		if(SW4Active())
-			SetPwm(PWM_MAXIMUM);
-		else
-			SetPwm(PWM_OFFSET);		
-		
-		
-		// Touch statussen inlezen.
+		// Touch statussen inlezen van de MPR121 via I²C.
 		touchStatus = Mpr121GetTouchStatus();		
-//		if(touchStatus != touchStatusOld)
-//		{			
-//			sprintf(text, "Received I2C-data: %d.\r\n", touchStatus);
-//			StringToUsart2(text);	
-
-//			touchStatusOld = touchStatus;
-//		}
-		
-		
-		// Gemeten afstand met HC-SR04 tonen indien touch-knop 11 is geactiveerd.
-		if((touchStatus & 0x0800) == 0x0800)
+		if(touchStatus != touchStatusOld)
 		{			
-			sprintf(text, "Distance: %d.\r\n", distance);
-			StringToUsart2(text);			
-		}
-		
-		
-		// Touch data (flankdetectie) omzetten naar een kleur met input 0,1 en 2.
+			sprintf(text, "Received touch data via I2C: %d.\r\n", touchStatus);
+			StringToUsart2(text);	
+
+			touchStatusOld = touchStatus;
+		}		
+
+		// Touch data (flankdetectie) omzetten naar een kleur met MPR121 input 0,1 en 2.
 		if((touchStatus & 0x01) && (touch1Help == false))
 		{
-			//StringToUsart2("R\r\n");
+			StringToUsart2("Red.\r\n");
 			
-			if(arrayRed == 0)
-				arrayRed = 255;
-			else
-				arrayRed = 0;
+			arrayRed = 255;
+			arrayGreen = 0;
+			arrayBlue = 0;
 			
 			touch1Help = true;
 		}
@@ -157,12 +147,11 @@ int main(void)
 		
 		if((touchStatus & 0x02) && (touch2Help == false))
 		{
-			//StringToUsart2("G\r\n");
+			StringToUsart2("Green.\r\n");
 			
-			if(arrayGreen == 0)
-				arrayGreen = 255;
-			else
-				arrayGreen = 0;	
+			arrayRed = 0;
+			arrayGreen = 255;
+			arrayBlue = 0;
 			
 			touch2Help = true;
 		}
@@ -171,12 +160,11 @@ int main(void)
 		
 		if((touchStatus & 0x04) && (touch3Help == false))
 		{
-			//StringToUsart2("B\r\n");
+			StringToUsart2("Blue.\r\n");
 			
-			if(arrayBlue == 0)
-				arrayBlue = 255;
-			else
-				arrayBlue = 0;
+			arrayRed = 0;
+			arrayGreen = 0;
+			arrayBlue = 255;
 			
 			touch3Help = true;
 		}
@@ -184,26 +172,21 @@ int main(void)
 			touch3Help = false;
 		
 		
-		// 5-bit helderheid opvragen.
+		// 5-bit helderheid opvragen via de AD-converter en de on board trimmer (Nucleo Extension Shield V2).
 		brightness = GetAdValue() >> 7;
 		// Beperken tot 2-bit om algemene helderheid niet te overdrijven.
 		brightness >>= 3;		
 		
 		
-//		// Alle LED's overlopen.
-//		index++;
-//		if(index >= NUMBER_OF_APA102C_LEDS)
-//			index = 0;
-
-		// Oude RGB-LED resetten.
-		rgbLeds[index].red = 0;
-		rgbLeds[index].green = 0;
-		rgbLeds[index].blue = 0;	
+		// Oude willekeurig gekozen RGB-LED resetten.
+		rgbLeds[randomIndex].red = 0;
+		rgbLeds[randomIndex].green = 0;
+		rgbLeds[randomIndex].blue = 0;	
 		
-		// Nieuwe willekeurige LED kiezen genereren.
-		index = rand() % NUMBER_OF_APA102C_LEDS;
+		// Nieuwe willekeurig gekozen LED kiezen om te laten flikkeren.
+		randomIndex = rand() % NUMBER_OF_APA102C_LEDS;
 		
-		// RGB-LED's resetten.
+		// Alle RGB-LED's resetten naar het basiskleur, met basis lichtsterkte.
 		for(counter = 0; counter < NUMBER_OF_APA102C_LEDS; counter++)
 		{
 			rgbLeds[counter].brightness = 0b11100000 | brightness;
@@ -212,17 +195,24 @@ int main(void)
 			rgbLeds[counter].blue = arrayBlue;	
 		}
 		
-		// TODO: brightness misschien regelen met RGB-waarden... Daarmee bekom je misschien een fijnere regeling.
-		// Nieuwe RGB-LED setten.
-		rgbLeds[index].brightness = 0b11100000 | 31;
-		rgbLeds[index].red = arrayRed;
-		rgbLeds[index].green = arrayGreen;
-		rgbLeds[index].blue = arrayBlue;
+		// Nieuwe willekeurig gekozen RGB-LED, instellen op maximum helderheid en correcte kleur (optioneel).
+		rgbLeds[randomIndex].brightness = 0b11100000 | 31;
+		rgbLeds[randomIndex].red = arrayRed;
+		rgbLeds[randomIndex].green = arrayGreen;
+		rgbLeds[randomIndex].blue = arrayBlue;
 		
-		// Verzend de data via SPI naar de LED's.
+		// Verzend de LED-data via SPI naar de LED's.
 		UpdateAPA102CLeds(rgbLeds);
 		
-		// Even wachten.
+		// De gemeten afstand met de (inferieure) HC-SR04 ultrasone sensor tonen.
+		if(newDistanceAvailable)
+		{			
+			newDistanceAvailable = false;
+			sprintf(text, "New distance: %d.\r\n", newDistance);
+			StringToUsart2(text);			
+		}		
+		
+		// Even wachten (anti-dender).
 		WaitForMs(10);
 	}
 }
@@ -233,7 +223,7 @@ void InitIo(void)
 	//Echo staat als input na reset (PA10 = 5V-tolerant).
 	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER10);
 	
-	// Trigger als output (PA6 NIET 5V-tolerant).
+	// Trigger als output zetten (PA6 NIET 5V-tolerant).
 	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER6) | GPIO_MODER_MODER6_0;	
 	
 	// SYSCFG clock enable.
@@ -251,8 +241,7 @@ void InitIo(void)
 	// Interrupt toelaten
 	EXTI->IMR = EXTI->IMR | EXTI_IMR_MR10;
 	
-	// Eén van de 4 prioriteiten kiezen. Als er twee interrupts zijn met dezelfde
-	// prioriteit, wordt eerst diegene afgehandeld die de laagste 'position' heeft (zie vector table NVIC in datasheet).
+	// Eén van de 4 prioriteiten kiezen.
 	NVIC_SetPriority(EXTI4_15_IRQn,1);
 	
 	// Interrupt effectief toelaten.
@@ -268,11 +257,11 @@ void TIM6_IRQHandler(void)
 		// Interruptvlag resetten
 		TIM6->SR &= ~TIM_SR_UIF;
 		
-		// afstand bijwerken
-		distance++;
+		// Afstand bijwerken. Eén tick van Timer 6 is 1 cm verder.
+		newDistance++;
 		
-		// verder dan 1,25 meter, stop de meting
-		if(distance >= 125)
+		// Verder dan 1 meter, stop de meting.
+		if(newDistance >= TRIGGER_DISTANCE)
 			StopTimer6();
 	}
 }
@@ -283,46 +272,61 @@ void EXTI4_15_IRQHandler(void)
 	// Als het een interrupt is van PA10...
 	if((EXTI->PR & EXTI_PR_PR10) == EXTI_PR_PR10)
 	{
-		// Interrupt (pending) vlag wissen door
-		// een 1 te schrijven: EXTI->PR |= EXTI_PR_PR10;
+		// Interrupt (pending) vlag wissen.
 		EXTI->PR |= EXTI_PR_PR10;
 		
-		if(GPIOA->IDR & GPIO_IDR_10)
+		// Status van PA10 checken.
+		if((GPIOA->IDR & GPIO_IDR_10) == GPIO_IDR_10)
 		{
 			// Rising edge van Echo gedetecteerd. Start de timer voor de meting.
 			StartTimer6();
-			distance = 0;
+			newDistance = 0;
 		}
 		else
 		{
 			// Falling edge van Echo gedetecteerd. Stop de timer voor de meting.
 			StopTimer6();
+			distanceCopy = newDistance;
+			
+			// Nieuwe meting, verlaag de afteller.
+			if(distanceSampleDowncounter > 0)
+				distanceSampleDowncounter--;
+			
+			// Als de nieuwe meting er één is die meer dan 1 meter mat, zet de afteller terug op zijn maximum.
+			// We willen immers voldoende correcte metingen na elkaar.
+			if(distanceCopy >= TRIGGER_DISTANCE)
+				distanceSampleDowncounter = NUMBER_OF_SUCCESSIVE_DISTANCE_MEASUREMENTS;
+			
+			// Melding doorgeven naar main().
+			newDistanceAvailable = true;
 		}
 	}
 }
-
 
 // Handler die iedere 1ms afloopt. Ingesteld met SystemCoreClockUpdate() en SysTick_Config().
 void SysTick_Handler(void)
 {
 	ticks++;
 	
-	// Iedere halve seconde een ultrasone meting starten.
-	if(ticks % 500 == 0)
-	{
-		// TODO: met timer werken...
+	// Iedere 300ms een ultrasone meting starten.
+	if(ticks % 300 == 0)
 		// Trigger starten voor de HC-SR04 (PA6).
-		GPIOA->ODR |= GPIO_ODR_6;		//trigger op 1 zetten
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-		GPIOA->ODR &= ~GPIO_ODR_6;		//trigger op 0 zetten
+		GPIOA->ODR |= GPIO_ODR_6;			// Trigger op 1 zetten.
+	else
+		GPIOA->ODR &= ~GPIO_ODR_6;		// Trigger op 0 zetten.
+	
+	// Servo aansturen met SW4 of de ultrasone sensor.
+	if((SW4Active() || (distanceSampleDowncounter == 0)) && (pwm < (PWM_MAXIMUM - PWM_VARIATION_SPEED)))
+	{
+		pwm += PWM_VARIATION_SPEED;
+		SetPwm(pwm);
 	}
+	else
+		if(pwm > (PWM_OFFSET + PWM_VARIATION_SPEED))
+		{
+			pwm -= PWM_VARIATION_SPEED;
+			SetPwm(pwm);	
+		}
 }
 
 // Wachtfunctie via de SysTick.
@@ -333,35 +337,35 @@ void WaitForMs(uint32_t timespan)
 	while(ticks < startTime + timespan);
 }
 
-// Klokken instellen. Deze functie niet wijzigen, tenzij je goed weet wat je doet.
+// Klokken instellen.
 void SystemClock_Config(void)
 {
 	RCC->CR |= RCC_CR_HSITRIM_4;														// HSITRIM op 16 zetten, dit is standaard (ook na reset).
-	RCC->CR  |= RCC_CR_HSION;																// Internal high speed oscillator enable (8MHz)
-	while((RCC->CR & RCC_CR_HSIRDY) == 0);									// Wacht tot HSI zeker ingeschakeld is
+	RCC->CR  |= RCC_CR_HSION;																// Internal high speed oscillator enable (8MHz).
+	while((RCC->CR & RCC_CR_HSIRDY) == 0);									// Wacht tot HSI zeker ingeschakeld is.
 	
-	RCC->CFGR &= ~RCC_CFGR_SW;															// System clock op HSI zetten (SWS is status geupdatet door hardware)	
-	while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI);	// Wachten to effectief HSI in actie is getreden
+	RCC->CFGR &= ~RCC_CFGR_SW;															// System clock op HSI zetten (SWS is status geupdatet door hardware).
+	while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI);	// Wachten to effectief HSI in actie is getreden.
 	
-	RCC->CR &= ~RCC_CR_PLLON;																// Eerst PLL uitschakelen
-	while((RCC->CR & RCC_CR_PLLRDY) != 0);									// Wacht tot PLL zeker uitgeschakeld is
+	RCC->CR &= ~RCC_CR_PLLON;																// Eerst PLL uitschakelen.
+	while((RCC->CR & RCC_CR_PLLRDY) != 0);									// Wacht tot PLL zeker uitgeschakeld is.
 	
-	RCC->CFGR |= RCC_CFGR_PLLSRC_HSI_PREDIV;								// 01: HSI/PREDIV selected as PLL input clock
-	RCC->CFGR2 |= RCC_CFGR2_PREDIV_DIV2;										// prediv = /2		=> 4MHz
-	RCC->CFGR |= RCC_CFGR_PLLMUL12;													// PLL multiplied by 12 => 48MHz
+	RCC->CFGR |= RCC_CFGR_PLLSRC_HSI_PREDIV;								// 01: HSI/PREDIV selected as PLL input clock.
+	RCC->CFGR2 |= RCC_CFGR2_PREDIV_DIV2;										// prediv = /2		=> 4MHz.
+	RCC->CFGR |= RCC_CFGR_PLLMUL12;													// PLL multiplied by 12 => 48MHz.
 	
-	FLASH->ACR |= FLASH_ACR_LATENCY;												//  meer dan 24 MHz, dus latency op 1 (p 67)
+	FLASH->ACR |= FLASH_ACR_LATENCY;												// Meer dan 24 MHz, dus latency op 1 (p 67).
 	
-	RCC->CR |= RCC_CR_PLLON;																// PLL inschakelen
-	while((RCC->CR & RCC_CR_PLLRDY) == 0);									// Wacht tot PLL zeker ingeschakeld is
+	RCC->CR |= RCC_CR_PLLON;																// PLL inschakelen.
+	while((RCC->CR & RCC_CR_PLLRDY) == 0);									// Wacht tot PLL zeker ingeschakeld is.
 
-	RCC->CFGR |= RCC_CFGR_SW_PLL; 													// PLLCLK selecteren als SYSCLK (48MHz)
-	while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL);	// Wait until the PLL is switched on
+	RCC->CFGR |= RCC_CFGR_SW_PLL; 													// PLLCLK selecteren als SYSCLK (48MHz).
+	while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL);	// Wait until the PLL is switched on.
 		
-	RCC->CFGR |= RCC_CFGR_HPRE_DIV1;												// SYSCLK niet meer delen, dus HCLK = 48MHz
-	RCC->CFGR |= RCC_CFGR_PPRE_DIV1;												// HCLK niet meer delen, dus PCLK = 48MHz	
+	RCC->CFGR |= RCC_CFGR_HPRE_DIV1;												// SYSCLK niet meer delen, dus HCLK = 48MHz.
+	RCC->CFGR |= RCC_CFGR_PPRE_DIV1;												// HCLK niet meer delen, dus PCLK = 48MHz.
 	
-	SystemCoreClockUpdate();																// Nieuwe waarde van de core frequentie opslaan in SystemCoreClock variabele
-	SysTick_Config(48000);																	// Interrupt genereren. Zie core_cm0.h, om na ieder 1ms een interrupt 
-																													// te hebben op SysTick_Handler()
+	SystemCoreClockUpdate();																// Nieuwe waarde van de core frequentie opslaan in SystemCoreClock variabele.
+	SysTick_Config(48000);																	// Interrupt genereren. Zie core_cm0.h, om na ieder 1ms een interrupt.
+																													// te hebben op SysTick_Handler().
 }

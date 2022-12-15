@@ -7,7 +7,7 @@ void UpdateAPA102CLeds(APA102C led[])
 {
 	uint8_t index = 0;
 	
-	ByteToSpi1(0);															// Start frame.
+	ByteToSpi1(0);																			// Start frame.
 	ByteToSpi1(0);
 	ByteToSpi1(0);
 	ByteToSpi1(0);
@@ -20,12 +20,11 @@ void UpdateAPA102CLeds(APA102C led[])
 		ByteToSpi1(led[index].red);												// Rood.
 	}
 	
-	ByteToSpi1(255);														// End frame.
+	ByteToSpi1(255);																		// End frame.
 	ByteToSpi1(255);
 	ByteToSpi1(255);
 	ByteToSpi1(255);
 	
 	// Extra klokken voorzien, anders wil de laatste LED niet mee..
-	ByteToSpi1(255);														// End frame.
-
+	ByteToSpi1(255);																		// End frame.
 }

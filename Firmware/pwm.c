@@ -14,17 +14,18 @@ void InitPwm(void)
 	
 	// PA9/modelbouw ESC moet TIM1_CH2 worden via alternate function 2
 	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER9) | GPIO_MODER_MODER9_1;		// Alternate function op PA9
-	GPIOA->AFR[1] |= 0x00000020;		// Alternate function 2
+	GPIOA->AFR[1] |= 0x00000020;						// Alternate function 2.
 	
 	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;			// Clock voorzien voor de timer1.	
-	TIM1->PSC = 47; 												// Prescaler op 1/48 => 48000000/48 => 1 탎 per puls
-	TIM1->ARR = 20000; 											// Periode van 20 ms want: 1탎 * 20000 = 20ms of  = 1/48000000 * 48 * 20000 = 20ms
-	pwm = 1000;															// Gewenste PWM-waarde (1000 <= pwm <= 2000). Want modelbouw-ESC verwacht minstens 1ms en maximum 2ms.
-	TIM1->CCR1 = pwm; 											// Aantijd voor OC1
+	TIM1->PSC = 47; 												// Prescaler op 1/48 => 48000000/48 => 1 탎 per puls.
+	TIM1->ARR = 20000; 											// Periode van 20 ms want: 1탎 * 20000 = 20ms of  = 1/48000000 * 48 * 20000 = 20ms.
+	pwm = PWM_OFFSET;												// Gewenste PWM-waarde (1000 <= pwm <= 2000). Want modelbouw-ESC verwacht minstens 1ms en maximum 2ms.
+	//TIM1->CCR1 = pwm; 										// Aantijd voor OC1
 	TIM1->CCR2 = pwm; 											// aantijd voor OC2
-	TIM1->CCMR1 |= TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE; 	// PWM mode 1 op OC1/PA8, enable preload register op OC1 (OC1PE = 1)
-	TIM1->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE; 	// PWM mode 1 op OC2/PA9, enable preload register op OC2 (OC2PE = 1)
-	TIM1->CCER |= TIM_CCER_CC1E | TIM_CCER_CC2E; 														// Enable OC1 (en OC2) output.
+	//TIM1->CCMR1 |= TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE; // PWM mode 1 op OC1/PA8, enable preload register op OC1 (OC1PE = 1).
+	TIM1->CCMR1 |= TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE; 	// PWM mode 1 op OC2/PA9, enable preload register op OC2 (OC2PE = 1).
+	TIM1->CCER |= TIM_CCER_CC2E; 																						// Enable OC2 output.
+	//TIM1->CCER |= TIM_CCER_CC1E | TIM_CCER_CC2E; 													// Enable OC1 (en OC2) output.
 	TIM1->BDTR |= TIM_BDTR_MOE; 																						// Enable output (MOE = 1).
 	TIM1->CR1 |= TIM_CR1_CEN; 																							// Enable counter (CEN = 1).
 	TIM1->EGR |= TIM_EGR_UG; 																								// Force update generation (UG = 1).
@@ -39,7 +40,7 @@ void SetPwm(uint16_t pPwm)
 	if(pPwm > PWM_MAXIMUM)
 		pPwm = PWM_MAXIMUM;
 
-	TIM1->CCR1 = pPwm; 										// Aantijd voor OC1
+	//TIM1->CCR1 = pPwm; 										// Aantijd voor OC1
 	TIM1->CCR2 = pPwm; 										// aantijd voor OC2
 	//TIM1->EGR |= TIM_EGR_UG; 							// Force update generation (UG = 1).
 }

@@ -17,10 +17,10 @@ void InitI2C1(void)
 	GPIOB->AFR[1] |= 0x00000010;
 	//GPIOB->PUPDR |= GPIO_PUPDR_PUPDR9_0;																				// Pull-up van pin inschakelen (naar 3V3).
 	
-	// HSI als input voor I2C1-module = 8MHz (default)
+	// HSI als input voor I2C1-module = 8MHz (default).
 	RCC->CFGR3 &= ~RCC_CFGR3_I2C1SW;
 	
-	// I²C1-module van een klok voorzien
+	// I²C1-module van een klok voorzien.
 	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
 	
 	// 7-bit adres voor het communiceren met een slave (geen 10-bit) (optioneel).

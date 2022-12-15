@@ -8,11 +8,11 @@ void InitUsart2(uint32_t baudRate)
 	
 	// Pinnen van de USART2 instellen als alternate function.	
 	// PA2 => TX-pin
-	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER2) | GPIO_MODER_MODER2_1;		// Alternate function op PA2
+	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER2) | GPIO_MODER_MODER2_1;		// Alternate function op PA2.
 	GPIOA->AFR[0] |= 0x00000100;																								// USART2_TX is alternate function AF1 (zie datasheet STM32F091RC, p43).
 
 	// PA3 => RX-pin
-	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER3) | GPIO_MODER_MODER3_1;		// Alternate function op PA3
+	GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER3) | GPIO_MODER_MODER3_1;		// Alternate function op PA3.
 	GPIOA->AFR[0] |= 0x00001000;
 		
 	// Usart module van een klok voorzien
@@ -55,34 +55,3 @@ void StringToUsart2(char* string)
 		while((USART2->ISR & USART_ISR_TC) != USART_ISR_TC);
 	}
 }
-
-/*
-// printf redirecting. Op die manier kan je 'printf("Hallo wereld");' gebruiken
-// i.p.v. 'StringToUsart2("Hallo wereld");'.
-//
-// Vergeet USART 2 niet in te stellen (en InitUsart2() op te roepen).
-struct __FILE
-{
-  int handle;
-	// Whatever you require here. If the only file you are using is
-	// standard output using printf() for debugging, no file handling
-	// is required.
-	//
-	// https://community.arm.com/developer/tools-software/tools/f/keil-forum/34791/how-printf-to-specific-usart
-};
-// FILE is typedef’d in stdio.h.
-FILE __stdout;
-
-int fputc(int ch, FILE *f)
-{
-	// Your implementation of fputc().	
-	
-	// Byte versturen.
-	USART2->TDR = ch;
-	
-	// Wachten tot byte vertuurd is.
-	while((USART2->ISR & USART_ISR_TC) != USART_ISR_TC);	
-  
-  return ch;
-}
-*/

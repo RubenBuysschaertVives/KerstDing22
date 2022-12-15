@@ -3,7 +3,7 @@
 #if !defined(APA102C_DEFINED)
 	#define APA102C_DEFINED
 	
-	#define MAXIMUM_LED_BRIGHTNESS 31			// Helderheid van de RGB-LED bij opstarten.
+	#define MAXIMUM_LED_BRIGHTNESS 31			// Helderheid van de RGB-LED's bij opstarten.
 	#define NUMBER_OF_APA102C_LEDS 72
 	
 	typedef struct{
