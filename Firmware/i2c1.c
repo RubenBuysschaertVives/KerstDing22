@@ -49,7 +49,10 @@ void I2C1WriteRegister(uint8_t deviceAddress, uint8_t registerToWrite, uint8_t d
 	
 	// Aantal te versturen bytes, waarna een stop gegenereerd moet worden (TC vlag wordt gezet).
 	I2C1->CR2 &= ~I2C_CR2_NBYTES;											// NBYTES wissen.
-	I2C1->CR2 |= (2 << 16);														// 2 bytes te versturen, dus 2 in NBYTES plaatsen.			
+	I2C1->CR2 |= (2 << 16);														// 2 bytes te versturen, dus 2 in NBYTES plaatsen.		
+
+	// Wachten tot vorige communicatie is afgelopen.
+	while((I2C1->ISR & I2C_ISR_BUSY) == I2C_ISR_BUSY);	
 
 	// Start conditie.
 	I2C1->CR2 |= I2C_CR2_START;
