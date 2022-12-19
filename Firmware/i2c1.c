@@ -82,6 +82,9 @@ uint8_t I2C1ReadRegister(uint8_t deviceAddress, uint8_t registerToRead)
 	I2C1->CR2 &= ~I2C_CR2_NBYTES;											// NBYTES wissen.
 	I2C1->CR2 |= (1 << 16);														// 1 byte te versturen, dus 1 in NBYTES plaatsen.			
 
+	// Wachten tot vorige communicatie is afgelopen.
+	while((I2C1->ISR & I2C_ISR_BUSY) == I2C_ISR_BUSY);
+	
 	// Start conditie.
 	I2C1->CR2 |= I2C_CR2_START;
 	

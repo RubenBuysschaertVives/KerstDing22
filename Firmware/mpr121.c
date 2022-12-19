@@ -45,16 +45,10 @@ uint16_t Mpr121GetTouchStatus(void)
 {
 	uint16_t touchStatus = 0;
 	
-	touchStatus = I2C1ReadRegister(MPR121, TSH);
-	touchStatus &= 0x0F;
-	touchStatus <<= 8;
-	
-	// Even wachten.
-	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
-	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();	
+// TODO: Uitlezen van TSH en TSL na elkaar, geeft problemen. Lees cyclus nog aanpassen aan beschrijving in datasheet.
+//	touchStatus = I2C1ReadRegister(MPR121, TSH);
+//	touchStatus &= 0x0F;
+//	touchStatus <<= 8;
 	
 	touchStatus += I2C1ReadRegister(MPR121, TSL);
 	
