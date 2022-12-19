@@ -48,6 +48,14 @@ uint16_t Mpr121GetTouchStatus(void)
 	touchStatus = I2C1ReadRegister(MPR121, TSH);
 	touchStatus &= 0x0F;
 	touchStatus <<= 8;
+	
+	// Even wachten.
+	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
+	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
+	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
+	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();
+	__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();	
+	
 	touchStatus += I2C1ReadRegister(MPR121, TSL);
 	
 	return touchStatus;
